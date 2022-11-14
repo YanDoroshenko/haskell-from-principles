@@ -86,3 +86,49 @@ flipMaybe :: [Maybe a] -> Maybe [a]
 flipMaybe [] = Just []
 flipMaybe (Nothing : _) = Nothing
 flipMaybe ((Just h) : t) = (h :) <$> (flipMaybe t)
+
+
+lefts' :: [Either a b] -> [a]
+lefts' = foldr f []
+  where
+    f (Left l) r = l : r
+    f (Right l) r = r
+
+rights' :: [Either a b] -> [b]
+rights' = foldr f []
+  where
+    f (Left l) r = r
+    f (Right l) r = l : r
+
+partitionEithers' :: [Either a b] -> ([a], [b])
+partitionEithers' = foldr f ([], [])
+  where
+    f (Left l) (ls, rs) = (l : ls, rs)
+    f (Right r) (ls, rs) = (ls, r : rs)
+
+eitherMaybe' :: (b -> c) -> Either a b -> Maybe c
+eitherMaybe' f (Right b) = Just $ f b
+eitherMaybe' _ _ = Nothing
+
+myIterate :: (a -> a) -> a -> [a]
+myIterate f a = a : (myIterate f $ f a)
+
+myUnfoldr :: (b -> Maybe (a, b)) -> b -> [a]
+myUnfoldr f z = case f z of
+                  Just (a, z') -> a : (myUnfoldr f z')
+                  Nothing -> []
+
+myIterate' f = myUnfoldr (\a -> Just (a, f a))
+
+data BinaryTree a =
+    Leaf
+    | Node (BinaryTree a) a (BinaryTree a)
+    deriving (Eq, Ord, Show)
+
+unfoldTree :: (a -> Maybe (a,b,a)) -> a -> BinaryTree b
+unfoldTree f a = case f a of
+               Nothing -> Leaf
+               Just (a1, b, a2) -> Node (unfoldTree f a1) b (unfoldTree f a2)
+
+treeBuild :: Integer -> BinaryTree Integer
+treeBuild n = unfoldTree (\a -> if (a < n) then Just (a + 1, a, a + 1) else Nothing) 0
