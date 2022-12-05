@@ -1,6 +1,7 @@
 module Exercises where
 
 import Control.Applicative
+import Control.Monad
 import Test.QuickCheck
 import Test.QuickCheck.Checkers
 import Test.QuickCheck.Classes
@@ -101,7 +102,7 @@ instance Arbitrary a => Arbitrary (List a) where
       f (h : t) = Cons h $ f t
 
 j :: Monad m => m (m a) -> m a
-j = flip (>>=) id
+j = (=<<) id
 
 l1 :: Monad m => (a -> b) -> m a -> m b
 l1 = (<$>)
