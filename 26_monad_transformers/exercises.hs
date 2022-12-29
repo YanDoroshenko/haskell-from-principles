@@ -3,17 +3,20 @@ module Exercises where
 
 import Data.Functor.Identity
 import Control.Monad
+import Control.Monad.Loops
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State hiding (get)
+import qualified Control.Monad.Trans.State (get)
 import Data.IORef
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as TL
 import System.Environment (getArgs)
-import Web.Scotty.Trans
+import System.Random (randomRIO)
+import Web.Scotty.Trans hiding (put)
 
 rDec :: Num a => Reader a a
 rDec = ReaderT $ Identity . (flip (-) 1)
@@ -90,3 +93,30 @@ main = do
   let config = Config counter $ TL.pack prefixArg
       runR m = runReaderT m config
   scottyT 3000 runR app
+
+morra :: StateT (Int, Int) IO ()
+morra = fmap (const ()) $ iterateWhile isJust $ do
+  lift $ putStrLn "Enter 1 or 2"
+  (p, c) <- Control.Monad.Trans.State.get
+  p' <- lift $ getLine
+  c' <- lift $ (randomRIO (1, 2) :: IO Int)
+  case (p', c') of
+    ("1", 1) -> do
+      let s' = (p + 1, c)
+      put s'
+      return $ Just s'
+    ("2", 1) -> do
+      let s' = (p, c + 1)
+      put s'
+      return $ Just s'
+    ("1", 2) -> do
+      let s' = (p, c + 1)
+      put $ s'
+      return $ Just s'
+    ("2", 2) -> do
+      let s' = (p, c + 1)
+      put s'
+      return $ Just s'
+    _ -> do
+      lift $ putStrLn $ "The score is: player " ++ (show p) ++ ", computer " ++ (show c)
+      return Nothing
