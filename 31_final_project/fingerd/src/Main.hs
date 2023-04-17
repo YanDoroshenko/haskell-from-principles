@@ -6,6 +6,7 @@ import qualified Database.SQLite.Simple as SQLite
 import Network.Socket
 import Data.Text.Encoding (decodeUtf8)
 import Network.Socket.ByteString (recv)
+import Control.Concurrent
 
 import Lib
 
@@ -35,6 +36,8 @@ main = withSocketsDo $ do
   listen sock 1
   -- only one connection open at a time
   conn <- SQLite.open "finger.db"
+  controlThreadId <- forkIO $ modifyLoop conn
   handleQueries conn sock
+  killThread controlThreadId
   SQLite.close conn
   close sock

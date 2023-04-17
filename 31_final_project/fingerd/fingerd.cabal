@@ -25,7 +25,8 @@ executable fingerd
                        network,
                        raw-strings-qq,
                        sqlite-simple,
-                       text
+                       text,
+                       aeson
   other-modules:       Lib
   ghc-options:         -Wall
                        -Wcompat

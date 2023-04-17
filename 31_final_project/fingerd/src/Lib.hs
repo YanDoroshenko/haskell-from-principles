@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Lib where
 import Control.Exception hiding (handle)
 import Control.Monad (forever)
@@ -17,6 +19,10 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Network.Socket.ByteString (recv, sendAll)
 import Text.RawString.QQ
+import Data.Aeson hiding (Null)
+import GHC.Generics
+import qualified Data.ByteString as BS (unpack)
+import qualified Data.ByteString.Lazy as LBS (pack)
 
 data User = User {
     userId :: Integer
@@ -118,3 +124,70 @@ handle f dbConn sock = forever $ do
   putStrLn "Got connection, handling query"
   f dbConn soc
   close soc
+
+data CreateUserDto = CreateUserDto {
+  c_username :: Text,
+  c_shell :: Text,
+  c_home :: Text,
+  c_name :: Text,
+  c_phone :: Text
+                                   } deriving (Generic, FromJSON)
+
+data UpdateUserDto = UpdateUserDto {
+  u_id :: Int,
+  u_username :: Text,
+  u_shell :: Text,
+  u_home :: Text,
+  u_name :: Text,
+  u_phone :: Text
+                                   } deriving (Generic, FromJSON)
+
+type UpdateRow = (Text, Text, Text, Text, Text, Int)
+
+createUser :: Connection -> CreateUserDto -> IO ()
+createUser conn (CreateUserDto username_ shell_ home_ name_ phone_) =
+  execute conn insertUser row
+    where row :: UserRow
+          row = (Null, username_, shell_, home_, name_, phone_)
+
+updateUser :: Connection -> UpdateUserDto -> IO ()
+updateUser conn (UpdateUserDto id_ username_ shell_ home_ name_ phone_) =
+  execute conn "UPDATE users SET username = ?, shell = ?, homeDirectory = ?, realName = ?, phone = ? WHERE id = ?" row
+    where row :: UpdateRow
+          row = (username_, shell_, home_, name_, phone_, id_)
+
+handleModificationQuery :: Connection -> Socket -> IO ()
+handleModificationQuery dbConn soc = do
+  msg <- recv soc 1024
+  res <- case (eitherDecode $ LBS.pack $ BS.unpack msg :: Either String UpdateUserDto) of
+    Right dto -> do
+      _ <- updateUser dbConn dto
+      return "Updated"
+    Left err ->
+      case (eitherDecode $ LBS.pack $ BS.unpack msg :: Either String CreateUserDto) of
+        Right dto -> do
+          _ <- createUser dbConn dto
+          return "Created"
+        Left _ ->
+          return $ "Can't deserialize request" ++ err
+  sendAll soc $ encodeUtf8 $ T.pack res
+
+handleModificationQueries :: Connection -> Socket -> IO ()
+handleModificationQueries = handle handleModificationQuery
+
+modifyLoop :: Connection -> IO ()
+modifyLoop conn = withSocketsDo $ do
+  addrinfos <-
+    getAddrInfo
+      (Just (defaultHints
+        {addrFlags = [AI_PASSIVE]}))
+      Nothing (Just "5150")
+  let serveraddr = head addrinfos
+  sock <- socket (addrFamily serveraddr)
+    Stream defaultProtocol
+  bind sock (addrAddress serveraddr)
+  listen sock 1
+  -- only one connection open at a time
+  handleModificationQueries conn sock
+  close sock
+
